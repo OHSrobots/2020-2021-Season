@@ -69,25 +69,24 @@ public class NewColor extends LinearOpMode {
         parameters.loggingTag          = "IMU";
         parameters.accelerationIntegrationAlgorithm = new JustLoggingAccelerationIntegrator();
         imu = hardwareMap.get(BNO055IMU.class, "imu");
+
+    //Calibrating Gyro
+        imu.initialize(parameters);
         
+    //Waiting for Player Start
         waitForStart();
         
     //Main Robot Code
         while (opModeIsActive()) {
-            imu.initialize(parameters);
             goToWhite();
-
-            imu.initialize(parameters);
             sleep(100);
-            goToRed();
 
-            //Setting Variable False so the Loop can Run for the Second Red Line
-            foundRed = false;
+            goToRed();
+            foundRed = false;   //Setting Variable False so the Loop can Run for the Second Red Line
 
             moveRobot(0.5, 0.5, 0.5, 0.5, 75);
             stopRobot();
 
-            imu.initialize(parameters);
             sleep(100);
             goToRed();
 
@@ -96,19 +95,19 @@ public class NewColor extends LinearOpMode {
     }
     
 
-//IMU Configuration Class
+//IMU Configuration Method
     String formatAngle(AngleUnit angleUnit, double angle) {
         return formatDegrees(AngleUnit.DEGREES.fromUnit(angleUnit, angle));
     }
 
 
-//IMU Configuration Class
+//IMU Configuration Method
     String formatDegrees(double degrees){
         return String.format(Locale.getDefault(), "%.1f", AngleUnit.DEGREES.normalize(degrees));
     } 
     
 
-//Class to Halt Robot Movement
+//Method to Halt Robot Movement
     public void stopRobot() {
         rightFront.setPower(0);
         leftFront.setPower(0);
@@ -117,7 +116,7 @@ public class NewColor extends LinearOpMode {
     }
     
 
-//Class to Move Robot @ Designated Speed & Duration
+//Method to Move Robot @ Designated Speed & Duration
     public void moveRobot(double rf, double lf, double rb, double lb, long dur) {
         rightFront.setPower(rf);
         leftFront.setPower(lf);
@@ -127,7 +126,7 @@ public class NewColor extends LinearOpMode {
     }
     
 
-//Class to Find & Move to the White Line
+//Method to Find & Move to the White Line
     public void goToWhite() {
     //Needed (non-changing) Variables
         final float[] hsvValues = new float[3];
@@ -139,6 +138,7 @@ public class NewColor extends LinearOpMode {
             NormalizedRGBA colors = colorSensor.getNormalizedColors();
             Color.colorToHSV(colors.toColor(), hsvValues);
             double heading = Double.parseDouble(formatAngle(angles.angleUnit, angles.firstAngle));
+            int countWhite = 0;
             
         //If-Else-If Statment to Drive Forward in a Straight Line
             if (heading < -0.1  && heading > -90){
@@ -157,21 +157,30 @@ public class NewColor extends LinearOpMode {
                 rightFront.setPower(0.35);
                 rightBack.setPower(0.35);
             }
+
+        //Telemetry Info for Diagnostics
+            telemetry.addLine()
+                .addData("Alpha Output", %.3f, colors.alpha)
+                .addData("Heading Output", %.3f, heading)
+                .addData("Loop Count", %,3f, count);
+            telemetry.update();
             
         //If Statement to Detect the White Line and Break the Loop
             if (colors.alpha > 0.5) {
                 stopRobot();
                 foundWhite = true;
             }
+            countWhite++;
         }
     }
     
 
-//Class to find & Move to the Red line
+//Method to find & Move to the Red line
     public void goToRed() {
     //Needed (non-changing) Variables
         final float[] hsvValues = new float[3];
         angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
+        int countRed = 0;
         
     //If the "foundRed" Boolean is False, Run Loop
         while (!foundRed && opModeIsActive()) {
@@ -197,12 +206,20 @@ public class NewColor extends LinearOpMode {
                 rightFront.setPower(0.25);
                 rightBack.setPower(0.25);
             }
+
+        //Telemetry Info for Diagnostics
+            telemetry.addLine()
+                .addData("Alpha Output", %.3f, colors.alpha)
+                .addData("Heading Output", %.3f, heading)
+                .addData("Loop Count", %,3f, countRed);
+            telemetry.update();
             
         //If Statement to Detect the Red Line and Break the Loop
             if (colors.alpha < 0.2) {
                 stopRobot();
                 foundRed = true;
             }
+            countRed++;
         }
     }
 }
