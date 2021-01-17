@@ -1,6 +1,8 @@
 package org.firstinspires.ftc.teamcode.competition;
 
 import java.util.List;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import java.util.Locale;
 import java.util.Stack;
 import android.view.View;
 import android.graphics.Color;
@@ -42,10 +44,10 @@ import org.firstinspires.ftc.robotcore.external.navigation.VuforiaLocalizer;
 public class TestAutonomous extends LinearOpMode {
 
 // Declaring Motors
-    private     DcMotor     rf;         //port 0
-    private     DcMotor     lf;         //port 1
-    private     DcMotor     rb;         //port 2
-    private     DcMotor     lb;         //port 3
+    private     DcMotorEx     rf;         //port 0
+    private     DcMotorEx     lf;         //port 1
+    private     DcMotorEx     rb;         //port 2
+    private     DcMotorEx     lb;         //port 3
     private     DcMotor     rs;         //port 0
     private     DcMotor     rl1;        //port 1
     private     DcMotor     rl2;        //port 2
@@ -56,7 +58,14 @@ public class TestAutonomous extends LinearOpMode {
     private     Servo       bs;         //port 1
     
     NormalizedColorSensor colorSensor;
-    View relativeLayout;
+    boolean foundRed = false;
+    boolean foundWhite = false;
+    
+    BNO055IMU imu;
+    Orientation angles;
+    Acceleration gravity;
+    boolean turned180 = false;
+    boolean didStrafe = false;  
 
     
 //Declaring Camera Variables 
@@ -70,11 +79,14 @@ public class TestAutonomous extends LinearOpMode {
     @Override
     
     public void runOpMode() {
+        telemetry.addData("Stat", "Initializing...");
+        telemetry.update();
+        
         // Mapping Devices
-        rf  =   hardwareMap.dcMotor.get("rightFront");
-        lf  =   hardwareMap.dcMotor.get("leftFront");
-        rb  =   hardwareMap.dcMotor.get("rightBack");
-        lb  =   hardwareMap.dcMotor.get("leftBack");
+        rf  =   hardwareMap.get(DcMotorEx.class, "rightFront");
+        lf  =   hardwareMap.get(DcMotorEx.class, "leftFront");
+        rb  =   hardwareMap.get(DcMotorEx.class, "rightBack");
+        lb  =   hardwareMap.get(DcMotorEx.class, "leftBack");
         
         rs  =   hardwareMap.dcMotor.get("ringScoop");
         rl1 =   hardwareMap.dcMotor.get("ringLaunch1");
@@ -89,6 +101,20 @@ public class TestAutonomous extends LinearOpMode {
         lf.setDirection(DcMotorSimple.Direction.REVERSE);    //Reverse
         lb.setDirection(DcMotorSimple.Direction.REVERSE);    //Reverse
         
+        colorSensor = hardwareMap.get(NormalizedColorSensor.class, "sensorColor");
+        if (colorSensor instanceof SwitchableLight) {
+            ((SwitchableLight)colorSensor).enableLight(true);
+        }
+        
+        BNO055IMU.Parameters parameters = new BNO055IMU.Parameters();
+        parameters.angleUnit           = BNO055IMU.AngleUnit.DEGREES;
+        parameters.accelUnit           = BNO055IMU.AccelUnit.METERS_PERSEC_PERSEC;
+        parameters.calibrationDataFile = "BNO055IMUCalibration.json";
+        parameters.loggingEnabled      = true;
+        parameters.loggingTag          = "IMU";
+        parameters.accelerationIntegrationAlgorithm = new JustLoggingAccelerationIntegrator();
+        imu = hardwareMap.get(BNO055IMU.class, "imu");
+        
         //Initialize Camera
         initVuforia();
         initTfod();
@@ -96,15 +122,13 @@ public class TestAutonomous extends LinearOpMode {
             tfod.activate();
         }
         
-        //Telemetry Data
-        telemetry.addData("Stat", "Initializing...");
-        telemetry.update();
-        sleep(900);
-        telemetry.addData("Stat", "Start Program");
-        telemetry.update();
-        
         //Camera Detection
         ts.setPosition(0.92);
+        bs.setPosition(0);
+        _rf.setPosition(0.8);
+        sleep(200);
+        
+        
         boolean singleStack = false;
         boolean quadStack = false;
             while (!opModeIsActive()) {
@@ -124,16 +148,24 @@ public class TestAutonomous extends LinearOpMode {
                     }
                 }
             }
+        imu.initialize(parameters);
+        
+        lf.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rf.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        lb.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rb.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            
+        telemetry.addData("Stat", "Start Program");
+        telemetry.update();
         
     //Waiting for start via Player
         waitForStart();
         
     //Initializing Servos
-        bs.setPosition(0);
-        _rf.setPosition(1);
+        //bs.setPosition(0);
+        //_rf.setPosition(1);
         
     //More telemetry data
-        telemetry.addData("RAO", "Running Code!");
         telemetry.addData("Status", "Pre-Coded Robot Driving");
         telemetry.update();
         
@@ -143,7 +175,7 @@ public class TestAutonomous extends LinearOpMode {
             //as.setPower(1);
             //sleep(350);
             
-            shootRing(10);
+            //shootRing(10);
             
             if(quadStack) {
                 //wheelSpeed(1,1,1,1);
@@ -174,6 +206,14 @@ public class TestAutonomous extends LinearOpMode {
                 sleep(250);
                 
             } else if(singleStack) {
+                goToWhite();
+                turn180();
+                moveRobot(-0.25, -0.25, -0.25, -0.25, 100);
+                stopRobot();
+                bs.setPosition(0.5);
+                sleep(50);
+                ts.setPosition(0.1);
+                sleep(50);
                 //testForColor();
                 
                 /* wheelSpeed(1, 1, 1, 1);
@@ -202,8 +242,9 @@ public class TestAutonomous extends LinearOpMode {
                 sleep(6); */
                 
             } else {
+                strafe("r", 500, 36);
                 //wheelSpeed(1, 1, 1, 1);
-                sleep(1178);
+                /*sleep(1178);
             
                 //wheelSpeed(0.5, -0.5, 0.5, -0.5);
                 sleep(870);
@@ -216,7 +257,7 @@ public class TestAutonomous extends LinearOpMode {
                 ts.setPosition(0.5);
                 sleep(25);
             
-                moveRobot(0.75, 0.75, 0.75, 0.75, 90);
+                moveRobot(0.75, 0.75, 0.75, 0.75, 90); */
             }
             stopRobot();
         }
@@ -242,6 +283,16 @@ public class TestAutonomous extends LinearOpMode {
        tfodParameters.minResultConfidence = 0.8f;
        tfod = ClassFactory.getInstance().createTFObjectDetector(tfodParameters, vuforia);
        tfod.loadModelFromAsset(TFOD_MODEL_ASSET, LABEL_FIRST_ELEMENT, LABEL_SECOND_ELEMENT);
+    }
+    
+    
+    
+    String formatAngle(AngleUnit angleUnit, double angle) {
+        return formatDegrees(AngleUnit.DEGREES.fromUnit(angleUnit, angle));
+    }
+    
+    String formatDegrees(double degrees){
+        return String.format(Locale.getDefault(), "%.1f", AngleUnit.DEGREES.normalize(degrees));
     }
 
 
@@ -277,6 +328,105 @@ public class TestAutonomous extends LinearOpMode {
         lb.setPower(lbSpeed);
         sleep(dur);
     }
+    
+
+//Method to Find & Move to the White Line
+    public void goToWhite() {
+    //Needed (non-changing) Variables
+        final float[] hsvValues = new float[3];
+        angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
+        
+    //If the "foundWhite" Boolean is False, Run Loop
+        while (!foundWhite && opModeIsActive()) {
+        //Needed (updating) Variables
+            NormalizedRGBA colors = colorSensor.getNormalizedColors();
+            Color.colorToHSV(colors.toColor(), hsvValues);
+            double heading = Double.parseDouble(formatAngle(angles.angleUnit, angles.firstAngle));
+            int countWhite = 0;
+            
+        //If-Else-If Statment to Drive Forward in a Straight Line
+            if (heading < -0.1  && heading > -90){
+                lf.setPower(0.35 - (0.025 * heading));
+                lb.setPower(0325 - (0.025 * heading));
+                rf.setPower(0.35 + (0.025 * heading));
+                rb.setPower(0.35 + (0.025 * heading));       
+            }else if (heading > 0.1 && heading < 90){
+                lf.setPower(0.35 + (0.025 * heading));
+                lb.setPower(0.35 + (0.025 * heading));
+                rf.setPower(0.35 - (0.025 * heading));
+                rb.setPower(0.35 - (0.025 * heading));    
+            } else {
+                lf.setPower(0.35);
+                lb.setPower(0.35);
+                rf.setPower(0.35);
+                rb.setPower(0.35);
+            }
+
+        //Telemetry Info for Diagnostics
+            telemetry.addLine()
+                .addData("Alpha Output", "%.3f", colors.alpha)
+                .addData("Heading Output", "%.3f", heading)
+                .addData("Loop Count", countWhite);
+            telemetry.update();
+            
+        //If Statement to Detect the White Line and Break the Loop
+            if (colors.alpha > 0.5) {
+                stopRobot();
+                foundWhite = true;
+            }
+            countWhite++;
+        }
+    }
+    
+    
+    //Method to find & Move to the Red line
+    public void goToRed() {
+    //Needed (non-changing) Variables
+        final float[] hsvValues = new float[3];
+        angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
+        int countRed = 0;
+        
+    //If the "foundRed" Boolean is False, Run Loop
+        while (!foundRed && opModeIsActive()) {
+        //Needed (updating) Variables
+            NormalizedRGBA colors = colorSensor.getNormalizedColors();
+            Color.colorToHSV(colors.toColor(), hsvValues);
+            double heading = Double.parseDouble(formatAngle(angles.angleUnit, angles.firstAngle));
+            
+        //If-Else-If Statement to Drive Forward in a Straight Line
+            if (heading < -0.1  && heading > -90){
+                lf.setPower(0.25 - (0.025 * heading));
+                lb.setPower(0.25 - (0.025 * heading));
+                rf.setPower(0.25 + (0.025 * heading));
+                rb.setPower(0.25 + (0.025 * heading));       
+            }else if (heading > 0.1 && heading < 90){
+                lf.setPower(0.25 + (0.025 * heading));
+                lb.setPower(0.25 + (0.025 * heading));
+                rf.setPower(0.25 - (0.025 * heading));
+                rb.setPower(0.25 - (0.025 * heading));    
+            } else {
+                lf.setPower(0.25);
+                lb.setPower(0.25);
+                rf.setPower(0.25);
+                rb.setPower(0.25);
+            }
+
+        //Telemetry Info for Diagnostics
+            telemetry.addLine()
+                .addData("Alpha Output", "%.3f", colors.alpha)
+                .addData("Heading Output", "%.3f", heading)
+                .addData("Loop Count", "%,3f", countRed);
+            telemetry.update();
+            
+        //If Statement to Detect the Red Line and Break the Loop
+            if (colors.alpha < 0.2) {
+                stopRobot();
+                foundRed = true;
+            }
+            countRed++;
+        }
+    }
+    
 
 //Method to Shoot Rings for Designated Time (seconds)
     public void shootRing(int wantedTime) {
@@ -294,5 +444,68 @@ public class TestAutonomous extends LinearOpMode {
         
             rs.setPower(1);
         }
+    }
+    
+    
+    public void turn180() {
+        while (opModeIsActive() && !turned180) {
+            angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
+            double heading = Double.parseDouble(formatAngle(angles.angleUnit, angles.firstAngle));
+            
+            rf.setPower(-0.35);
+            lf.setPower(0.35);
+            rb.setPower(-0.35);
+            lb.setPower(0.35);
+            
+            telemetry.addData("heading", heading);
+            telemetry.update();
+            
+            if (heading <= 181 && heading >= 179) {
+                stopRobot();
+                turned180 = true;
+            }
+        }
+    }
+    
+    
+    
+    public void strafe(String direction, int speed, double length) {
+        double calcPosition = length * (100* 280/(16.9646003294*4 *8.8 * 1.0555555556));
+        int setPosition = (int) Math.round(calcPosition);
+        
+        if (direction.equals("r")) {
+            lf.setTargetPosition(setPosition);
+            rf.setTargetPosition(-setPosition);
+            lb.setTargetPosition(-setPosition);
+            rb.setTargetPosition(setPosition);
+        } else if (direction.equals("l")) {
+            lf.setTargetPosition(-setPosition);
+            rf.setTargetPosition(setPosition);
+            lb.setTargetPosition(setPosition);
+            rb.setTargetPosition(-setPosition);
+        } else {
+            stopRobot();
+        }
+      
+        lf.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        rf.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        lb.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        rb.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+      
+        lf.setVelocity(500);
+        rf.setVelocity(500);
+        lb.setVelocity(500);
+        rb.setVelocity(500);
+      
+        while (opModeIsActive() && lf.isBusy()) {
+            telemetry.addData("position", lf.getCurrentPosition());
+            telemetry.addData("is at target", !lf.isBusy());
+            telemetry.update();
+        }
+      
+        lf.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rf.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        lb.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rb.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
     }
 }
