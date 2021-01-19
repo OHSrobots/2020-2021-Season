@@ -198,7 +198,7 @@ public class FinalAutonomous extends LinearOpMode {
                 senseLine("white", 0.25);
                 moveInches(48);
                 encoders("n");
-                turn(0.4, 94);
+                turn(0.3, 94);
                 moveInches(-33);
                 encoders("n");
                 dropWobble();
@@ -221,7 +221,7 @@ public class FinalAutonomous extends LinearOpMode {
                 forceStop();
             } else {
                 encoders("n");
-                senseLine("white", 0.5); // 0.25
+                senseLine("white", 0.25); // 0.25
                 turn(0.25, 90);
                 moveInches(-28);
                 dropWobble();
